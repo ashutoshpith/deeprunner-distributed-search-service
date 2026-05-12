@@ -1,0 +1,566 @@
+{
+  "info": {
+    "name": "Distributed Document Search Service",
+    "description": "Complete request collection for the Distributed Document Search Service. Set the `base_url` and `tenant_id` collection variables before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "tenant_id",
+      "value": "acme-corp",
+      "type": "string"
+    },
+    {
+      "key": "document_id",
+      "value": "",
+      "type": "string",
+      "description": "Populated automatically by the Post Document request's test script."
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Liveness and readiness probe. Returns 200 when Postgres and Redis are reachable, 503 when either is down."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Postgres ok', () => pm.expect(pm.response.json().postgres).to.eql('ok'));",
+                  "pm.test('Redis ok',    () => pm.expect(pm.response.json().redis).to.eql('ok'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Documents",
+      "item": [
+        {
+          "name": "POST /documents — ingest article",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Introduction to Full-Text Search\",\n  \"content\": \"Full-text search allows users to search for specific words or phrases within a large body of text. PostgreSQL provides powerful FTS capabilities through tsvector and tsquery types, combined with GIN indexes for fast retrieval.\",\n  \"metadata\": {\n    \"author\": \"Alice Johnson\",\n    \"category\": \"engineering\",\n    \"tags\": [\"postgres\", \"search\", \"fts\"]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/documents",
+              "host": ["{{base_url}}"],
+              "path": ["documents"]
+            },
+            "description": "Ingest a new document. Returns 202 immediately; search_vec is built in the background. The test script saves the returned `id` to the `document_id` collection variable."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 202', () => pm.response.to.have.status(202));",
+                  "pm.test('Status is indexing', () => pm.expect(pm.response.json().status).to.eql('indexing'));",
+                  "const id = pm.response.json().id;",
+                  "pm.collectionVariables.set('document_id', id);",
+                  "console.log('Saved document_id:', id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /documents — ingest guide (second doc)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Redis Caching Strategies\",\n  \"content\": \"Redis is an in-memory data structure store used as a database, cache, and message broker. Common caching patterns include cache-aside, write-through, and write-behind. Using Redis for search result caching dramatically reduces database load.\",\n  \"metadata\": {\n    \"author\": \"Bob Smith\",\n    \"category\": \"infrastructure\",\n    \"tags\": [\"redis\", \"cache\", \"performance\"]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/documents",
+              "host": ["{{base_url}}"],
+              "path": ["documents"]
+            },
+            "description": "Ingest a second document to populate the index for search testing."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 202', () => pm.response.to.have.status(202));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /documents — with explicit UUID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"title\": \"FastAPI Async Patterns\",\n  \"content\": \"FastAPI leverages Python asyncio to handle thousands of concurrent requests. Using async database drivers like asyncpg and async Redis clients ensures no event loop blocking. Background tasks allow immediate responses while deferred work continues.\",\n  \"metadata\": {\n    \"author\": \"Carol White\",\n    \"category\": \"engineering\",\n    \"tags\": [\"fastapi\", \"async\", \"python\"]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/documents",
+              "host": ["{{base_url}}"],
+              "path": ["documents"]
+            },
+            "description": "Ingest a document with a client-supplied UUID. Useful for idempotent ingestion pipelines."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 202', () => pm.response.to.have.status(202));",
+                  "pm.test('ID matches supplied UUID', () => pm.expect(pm.response.json().id).to.eql('550e8400-e29b-41d4-a716-446655440000'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /documents — missing X-Tenant-ID (expect 422)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"No Tenant Document\",\n  \"content\": \"This request is missing the X-Tenant-ID header and should be rejected.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/documents",
+              "host": ["{{base_url}}"],
+              "path": ["documents"]
+            },
+            "description": "Negative test — omitting the required X-Tenant-ID header must return 422."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /documents/:id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documents/{{document_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{document_id}}"]
+            },
+            "description": "Fetch a single document by its UUID. Uses the `document_id` variable set by the POST request. Result is cached for 5 minutes."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has title', () => pm.expect(pm.response.json()).to.have.property('title'));",
+                  "pm.test('Tenant matches', () => pm.expect(pm.response.json().tenant_id).to.eql(pm.collectionVariables.get('tenant_id')));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /documents/:id — wrong tenant (expect 404)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-ID",
+                "value": "other-tenant"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documents/{{document_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{document_id}}"]
+            },
+            "description": "A document from another tenant must return 404 (not 403) to avoid leaking existence information."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Code NOT_FOUND', () => pm.expect(pm.response.json().detail.code).to.eql('NOT_FOUND'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /documents/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documents/{{document_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{document_id}}"]
+            },
+            "description": "Soft-delete a document. Sets deleted_at, invalidates doc cache + all search caches for the tenant. Returns 204 No Content."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /documents/:id — already deleted (expect 404)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/documents/{{document_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["documents", "{{document_id}}"]
+            },
+            "description": "Deleting an already-deleted (or non-existent) document returns 404."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Search",
+      "item": [
+        {
+          "name": "GET /search — full-text query",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/search?q=full text search postgres&tenant={{tenant_id}}&limit=10&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["search"],
+              "query": [
+                { "key": "q",      "value": "full text search postgres" },
+                { "key": "tenant", "value": "{{tenant_id}}" },
+                { "key": "limit",  "value": "10" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "Full-text search using tsvector. First call hits Postgres and caches the result. Second call returns cached=true."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has results array', () => pm.expect(body.results).to.be.an('array'));",
+                  "pm.test('Has total',         () => pm.expect(body).to.have.property('total'));",
+                  "pm.test('Has took_ms',       () => pm.expect(body).to.have.property('took_ms'));",
+                  "pm.test('Has cached flag',   () => pm.expect(body).to.have.property('cached'));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /search — second call (should be cached)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/search?q=full text search postgres&tenant={{tenant_id}}&limit=10&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["search"],
+              "query": [
+                { "key": "q",      "value": "full text search postgres" },
+                { "key": "tenant", "value": "{{tenant_id}}" },
+                { "key": "limit",  "value": "10" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "Exact same query as above — should return cached=true and be significantly faster."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Result is cached', () => pm.expect(pm.response.json().cached).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /search — redis caching",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/search?q=redis cache&tenant={{tenant_id}}&limit=5&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["search"],
+              "query": [
+                { "key": "q",      "value": "redis cache" },
+                { "key": "tenant", "value": "{{tenant_id}}" },
+                { "key": "limit",  "value": "5" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "Search for a different term to test result ranking."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /search — trigram fuzzy fallback",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/search?q=Postgress&tenant={{tenant_id}}&limit=10&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["search"],
+              "query": [
+                { "key": "q",      "value": "Postgress" },
+                { "key": "tenant", "value": "{{tenant_id}}" },
+                { "key": "limit",  "value": "10" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "Deliberately misspelled query ('Postgress'). FTS will return 0 rows; pg_trgm trigram similarity kicks in as fallback."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /search — pagination",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenant_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/search?q=search&tenant={{tenant_id}}&limit=2&offset=2",
+              "host": ["{{base_url}}"],
+              "path": ["search"],
+              "query": [
+                { "key": "q",      "value": "search" },
+                { "key": "tenant", "value": "{{tenant_id}}" },
+                { "key": "limit",  "value": "2" },
+                { "key": "offset", "value": "2" }
+              ]
+            },
+            "description": "Paginated search — page 2, 2 results per page."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Max 2 results', () => pm.expect(pm.response.json().results.length).to.be.at.most(2));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /search — missing X-Tenant-ID (expect 422)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/search?q=postgres&tenant=acme-corp",
+              "host": ["{{base_url}}"],
+              "path": ["search"],
+              "query": [
+                { "key": "q",      "value": "postgres" },
+                { "key": "tenant", "value": "acme-corp" }
+              ]
+            },
+            "description": "Missing X-Tenant-ID header — must return 422."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
